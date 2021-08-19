@@ -1,9 +1,5 @@
-import numpy as np
-import datetime as dt
-import pandas as pd
-import sys
 
-import sqlalchemy
+import datetime as dt
 from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine, func
@@ -35,7 +31,23 @@ session = Session(engine)
 #################################################
 app = Flask(__name__)
 
+#################################################
+# Temperature Function
+#################################################
+def calc_temps(start_date, end_date):
+        """TMIN, TAVG, and TMAX for a list of dates.
 
+        Args:
+        start_date (string): A date string in the format %Y-%m-%d
+        end_date (string): A date string in the format %Y-%m-%d
+        
+        Returns:
+        TMIN, TAVG, and TMAX
+        """
+        session = Session(engine)
+        return session.query(func.min(measurements.tobs), func.avg(measurements.tobs), func.max(measurements.tobs)).\
+        filter(measurements.date >= start_date).filter(measurements.date <= end_date).all()
+        
 #################################################
 # Flask Routes
 #################################################
@@ -47,19 +59,17 @@ def welcome():
         f"/api/v1.0/precipitation<br/>"
         f"/api/v1.0/stations<br/>"
         f"/api/v1.0/tobs<br/>"
-        f"/api/v1.0/tobs<br/>"
-        f"/api/v1.0/<start><br/>"
-        f"/api/v1.0/<start>/<end>"
+        f"/api/v1.0/start<br/>"
+        f"/api/v1.0/start/end"
     )   
 
 
 @app.route("/api/v1.0/precipitation")
 def prcp():
     
-    
-
     """Return a list of all precipitation data"""
     # Query all precipitation data
+    session = Session(engine)
     last_twelve_months = dt.date(2017,8,23) - dt.timedelta(days=365)
 
     results = session.query(measurements.date, measurements.prcp).\
@@ -67,23 +77,45 @@ def prcp():
     order_by(measurements.date).all()
 
     prcp_list = []
+    #prcp_list = dict(results)
     for prcp in results:
         prcp_dict = {}
         prcp_dict["date"] = prcp[0]
         prcp_dict["prcp"] = prcp[1]
     
         prcp_list.append(prcp_dict)
-
+    
+    session.close()
     return jsonify(prcp_list)
     
 
+@app.route("/api/v1.0/stations")
+def mystations():
+    
+    """Return a list of all station names"""
+    # Query all station names
+    session = Session(engine)
+    results = session.query(stations.station,stations.name).all()
+    
+    station_list = []
+    #station_list = dict(results)
+    for station in results:
+        station_dict = {}
+        station_dict["station"] = station[0]
+        station_dict["name"] = station[1]
+    
+        station_list.append(station_dict)
 
+    session.close()
+    return jsonify(station_list)
+    
 
 @app.route("/api/v1.0/tobs")
-def tobs():
+def mytobs():
 
     """Return a list of temperature observations (TOBS) for the previous year"""
-    # Query all station names
+    # Query all the dates and temperature observations of the most active station for the last year of data
+    session = Session(engine)
     last_twelve_months = dt.date(2017,8,23) - dt.timedelta(days=365)
  
     results = session.query(measurements.date,measurements.tobs).\
@@ -93,6 +125,7 @@ def tobs():
     
 
     temp_list = []
+    #temp_list = dict(results)
     for temp in results:
         temp_dict = {}
         temp_dict["date"] = temp[0]
@@ -100,9 +133,54 @@ def tobs():
     
         temp_list.append(temp_dict)
 
+    session.close()
+
     return jsonify(temp_list)  
 
+@app.route("/api/v1.0/<start_date>")
+def start(start_date):
+
+    """Return a list of the minimum temperature, the average temperature, and the max temperature for a given start"""
+    # Query all list of the minimum temperature, the average temperature, and the max temperature for a given start.
+    session = Session(engine)
+
+    results = (calc_temps(start_date,start_date))
+ 
     
+
+    temp_list = []
+      #temp_list = dict(results)  
+    for temp in results:
+        temp_dict = {}
+        temp_dict["min"] = temp[0]
+        temp_dict["avg"] = temp[1]
+        temp_dict["max"] = temp[2]
+    
+        temp_list.append(temp_dict)
+    
+    session.close()
+    return jsonify(temp_list)     
+
+@app.route("/api/v1.0/<start>/<end>")
+def start_end(start,end):
+
+    """Return a list of the minimum temperature, the average temperature, and the max temperature for a given start and start-end range"""
+    # Query all list of the minimum temperature, the average temperature, and the max temperature for a given start and start-end range.
+    session = Session(engine)
+    results = (calc_temps(start,end))
+ 
+    temp_list = []
+      #temp_list = dict(results)
+    for temp in results:
+        temp_dict = {}
+        temp_dict["min"] = temp[0]
+        temp_dict["avg"] = temp[1]
+        temp_dict["max"] = temp[2]
+    
+        temp_list.append(temp_dict)
+    
+    session.close()
+    return jsonify(temp_list)     
 
 if __name__ == '__main__':
     app.run(debug=True)
